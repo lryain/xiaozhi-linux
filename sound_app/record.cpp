@@ -27,6 +27,7 @@
  */
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <alsa/asoundlib.h>
 #include <speex/speex_preprocess.h>
 #include <pthread.h>
