@@ -29,15 +29,25 @@ Linux 小智运行演示视频：https://www.bilibili.com/video/BV17nXNYJE5P/?sh
 
 - 小智接口流程概述
 
-![01_小智的接口流程概述](docs/img/01_小智的接口流程概述.png)
+![01_小智的接口流程概述](docs/img/01_小智的接口流程概述-1.png)
+
+![01_小智的接口流程概述](docs/img/01_小智的接口流程概述-2.png)
+
+![01_小智的接口流程概述](docs/img/01_小智的接口流程概述-3.png)
 
 - sound_app框架分析
 
-![02_sound_app框架分析](docs/img/02_sound_app框架分析.png)
+![02_sound_app框架分析](docs/img/02_sound_app框架分析-1.png)
+
+![02_sound_app框架分析](docs/img/02_sound_app框架分析-2.png)
 
 - control_center框架分析
 
-![03_control_center框架分析](docs/img/03_control_center框架分析.png)
+![03_control_center框架分析](docs/img/03_control_center框架分析-1.png)
+
+![03_control_center框架分析](docs/img/03_control_center框架分析-2.png)
+
+![03_control_center框架分析](docs/img/03_control_center框架分析-3.png)
 
 ## 提交贡献
 
