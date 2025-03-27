@@ -6,10 +6,10 @@
 
 已支持硬件列表：
 
-- 100ASK_T113s3-PRO Tina4 :  https://github.com/100askTeam/xiaozhi-linux-SupportList/tree/100ASK_T113s3-Pro_Tina4
-- 100ASK_T113s3-PRO Tina5：https://github.com/100askTeam/xiaozhi-linux-SupportList/tree/100ask-T113s3-Pro_Tina5
-- DongshanPI-AICT Tina4 ： https://github.com/100askTeam/xiaozhi-linux-SupportList/tree/DongshanPI-AICT
-- 100ASK_IMX6ULL-PRO Buildroot20 : https://github.com/100askTeam/xiaozhi-linux-SupportList/tree/100ASK_IMX6ULL-PRO
+- 100ASK_T113s3-PRO Tina4系统 :  [100ASK_T113s3-Pro_Tina4](https://github.com/100askTeam/xiaozhi-linux-SupportList/tree/100ASK_T113s3-Pro_Tina4)
+- 100ASK_T113s3-PRO Tina5系统： [100ASK-T113s3-Pro_Tina5](https://github.com/100askTeam/xiaozhi-linux-SupportList/tree/100ask-T113s3-Pro_Tina5)
+- DongshanPI-AICT Tina4系统 ： [DongshanPI-AICT](https://github.com/100askTeam/xiaozhi-linux-SupportList/tree/DongshanPI-AICT)
+- 100ASK_IMX6ULL-PRO Buildroot20系统 : [100ASK_IMX6ULL-PRO](https://github.com/100askTeam/xiaozhi-linux-SupportList/tree/100ASK_IMX6ULL-PRO)
 
 提交贡献更多单板请参考: https://github.com/100askTeam/xiaozhi-linux-SupportList 内 README 
 
