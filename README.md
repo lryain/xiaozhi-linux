@@ -5,7 +5,7 @@
 目前支持单板平台 NXP IMX6ULL 平台，在支持 全志Tina T113 V85x系列平台 ， 嘉楠K230 ，以及RK 系列 STM32MP157 等平台  。 未来计划支持更多平台芯片以及开发板,欢迎感兴趣同学 提交 支持。
 
 已支持硬件列表：
-
+- DshanPIxCanMV K230 Buildroot24系统 : [DshanPI-CanMV](https://github.com/100askTeam/xiaozhi-linux-SupportList/tree/DshanPI-CanMV)
 - 100ASK_T113s3-PRO Tina4系统 :  [100ASK_T113s3-Pro_Tina4](https://github.com/100askTeam/xiaozhi-linux-SupportList/tree/100ASK_T113s3-Pro_Tina4)
 - 100ASK_T113s3-PRO Tina5系统： [100ASK-T113s3-Pro_Tina5](https://github.com/100askTeam/xiaozhi-linux-SupportList/tree/100ask-T113s3-Pro_Tina5)
 - DongshanPI-AICT Tina4系统 ： [DongshanPI-AICT](https://github.com/100askTeam/xiaozhi-linux-SupportList/tree/DongshanPI-AICT)
