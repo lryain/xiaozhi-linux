@@ -143,7 +143,7 @@ int play_get_data_callback(unsigned char *buffer, size_t size) {
         unsigned int outputChannels;
         snd_pcm_format_t outputFormat;
     
-        get_actual_record_settings(&outputSampleRate, &outputChannels, &outputFormat);
+        get_actual_play_settings(&outputSampleRate, &outputChannels, &outputFormat);
         init_opus_decoder(16000, 1, 60, outputSampleRate, outputChannels);
 
         init = 1;

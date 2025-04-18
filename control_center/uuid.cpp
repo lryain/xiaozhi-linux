@@ -45,6 +45,7 @@ using json = nlohmann::json;
  * 该函数遍历 /sys/class/net/ 目录下的所有网络接口，
  * 查找名称以 "wlan" 或 "wlp" 开头的无线网卡接口，
  * 并读取其对应的 address 文件以获取 MAC 地址。
+ * 如果未找到无线网卡接口，则读取第一个可用的网卡接口。
  *
  * @return 无线网卡的 MAC 地址，如果未找到则返回空字符串
  */
@@ -52,6 +53,7 @@ std::string get_wireless_mac_address() {
     DIR *dir;
     struct dirent *entry;
     std::string mac_address;
+    std::string first_mac_address;
 
     // 打开 /sys/class/net/ 目录
     dir = opendir("/sys/class/net/");
@@ -76,10 +78,28 @@ std::string get_wireless_mac_address() {
                 closedir(dir);
                 return mac_address;
             }
+        } else {
+            // 如果不是 wlan 或 wlp 接口，记录第一个可用的接口
+            if (first_mac_address.empty()) {
+                std::string address_path = "/sys/class/net/" + interface_name + "/address";
+
+                // 打开 address 文件
+                std::ifstream address_file(address_path);
+                if (address_file.is_open()) {
+                    std::getline(address_file, first_mac_address);
+                    address_file.close();
+                }
+            }
         }
     }
 
     closedir(dir);
+
+    // 如果没有找到 wlan 或 wlp 接口，返回第一个可用的接口的 MAC 地址
+    if (!first_mac_address.empty()) {
+        return first_mac_address;
+    }
+
     return "";
 }
 
