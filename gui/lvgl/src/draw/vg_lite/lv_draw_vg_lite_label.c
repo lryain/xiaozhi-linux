@@ -8,7 +8,9 @@
  *********************/
 
 #include "../../misc/lv_area_private.h"
+#if LV_USE_FREETYPE
 #include "../../libs/freetype/lv_freetype_private.h"
+#endif
 #include "../lv_draw_label_private.h"
 #include "lv_draw_vg_lite.h"
 

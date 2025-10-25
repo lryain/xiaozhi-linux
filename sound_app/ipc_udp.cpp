@@ -36,6 +36,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <pthread.h>
+#include <errno.h>
 
 #include "ipc_udp.h"
 
@@ -270,8 +271,14 @@ static int udp_recv_data(ipc_endpoint_t *pendpoint, unsigned char *data, int max
     }
 
     // 接收数据
-    bytes_received = recvfrom(fd, data, maxlen, 0, (struct sockaddr *)&client_addr, &client_len);
+    // Use non-blocking recv so callers (audio playback) won't block the audio thread
+    bytes_received = recvfrom(fd, data, maxlen, MSG_DONTWAIT, (struct sockaddr *)&client_addr, &client_len);
     if (bytes_received < 0) {
+        if (errno == EAGAIN || errno == EWOULDBLOCK) {
+            // No data available right now, not an error for non-blocking use
+            *retlen = 0;
+            return 0;
+        }
         perror("Failed to receive data from server");
         return -1;
     }

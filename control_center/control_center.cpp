@@ -425,15 +425,15 @@ bool write_uuid_to_config(const std::string& uuid) {
  */
 void read_server_config(std::string& hostname, std::string& port, std::string& path, std::string& ota_url, bool& use_tls) {
     // 默认值
-    hostname = "api.tenclass.net";
+    hostname = "";
     port = "443";
     path = "/xiaozhi/v1/";
-    ota_url = "https://api.tenclass.net/xiaozhi/ota/";
+    ota_url = "";
     use_tls = true;
 
-    std::ifstream config_file("../conf/server.json");
+    std::ifstream config_file("../../conf/server.json");
     if (!config_file.is_open()) {
-        std::cerr << "Warning: Failed to open ../conf/server.json, using default server config" << std::endl;
+        std::cerr << "Warning: Failed to open ../../conf/server.json, using default server config" << std::endl;
         return;
     }
 
@@ -459,10 +459,10 @@ void read_server_config(std::string& hostname, std::string& port, std::string& p
             if (server.contains("use_tls")) {
                 use_tls = server["use_tls"].get<bool>();
             }
-            std::cout << "Loaded server config from ../conf/server.json" << std::endl;
+            std::cout << "Loaded server config from ../../conf/server.json" << std::endl;
         }
     } catch (const nlohmann::json::parse_error& e) {
-        std::cerr << "Warning: Failed to parse ../conf/server.json: " << e.what() << ", using default config" << std::endl;
+        std::cerr << "Warning: Failed to parse ../../conf/server.json: " << e.what() << ", using default config" << std::endl;
     } catch (const std::exception& e) {
         std::cerr << "Warning: Error reading server config: " << e.what() << ", using default config" << std::endl;
     }

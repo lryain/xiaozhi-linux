@@ -214,6 +214,7 @@ static void lv_100ask_xz_ai_main_deinit(void)
 
 static void init_freetype(void)
 {
+#if LV_USE_FREETYPE
     /*Create a font*/
     gp_chat_font_freetype = lv_freetype_font_create(PATH_PREFIX "HarmonyOS_Sans_SC_Regular.ttf",
                                                     LV_FREETYPE_FONT_RENDER_MODE_BITMAP,
@@ -229,17 +230,21 @@ static void init_freetype(void)
         LV_LOG_ERROR("freetype font create failed.");
         exit(-1);
     }
+#endif
 }
 
 static void deinit_freetype(void)
 {
+#if LV_USE_FREETYPE
     lv_freetype_font_delete(gp_chat_font_freetype);
     lv_freetype_font_delete(gp_state_font_freetype);
+#endif
 }
 
 
 static void init_style(void)
 {
+#if LV_USE_FREETYPE
     /*Create style with the new font*/;
     lv_style_init(&g_style_chat_font);
     lv_style_set_text_font(&g_style_chat_font, gp_chat_font_freetype);
@@ -248,6 +253,7 @@ static void init_style(void)
     lv_style_init(&g_style_state_font);
     lv_style_set_text_font(&g_style_state_font, gp_state_font_freetype);
     lv_style_set_text_align(&g_style_state_font, LV_TEXT_ALIGN_CENTER);
+#endif
 }
 
 

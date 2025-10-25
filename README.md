@@ -59,6 +59,7 @@ Linux 小智运行演示视频：https://www.bilibili.com/video/BV17nXNYJE5P/?sh
 ```bash
 sudo apt update
 sudo apt install build-essential libasound2-dev libopus-dev libspeexdsp-dev libboost-system-dev libssl-dev libcurl4-openssl-dev nlohmann-json3-dev
+sudo apt-get install libfreetype6-dev
 ```
 
 ### 编译方法

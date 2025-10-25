@@ -33,6 +33,9 @@
 #include <alsa/asoundlib.h>
 #include <pthread.h>
 #include <opus/opus.h>
+#include <vector>
+#include <mutex>
+#include <condition_variable>
 
 #include "aplay.h"
 #include "record.h"
@@ -55,6 +58,19 @@ static int g_totalPCMDataSize;
 
 static unsigned char g_opus_play_buffer[OPUS_BUF_SIZE]; /* 把要播放的OPUS码流存在这里 */
 static unsigned char g_play_buffer[BUFFER_SIZE]; /* OPUS解码后得到的PCM数据,暂存在这里 */
+
+// Ring buffer for decoded PCM data between receiver thread and playback callback
+static std::vector<unsigned char> g_ring_buffer;
+static size_t g_ring_capacity = BUFFER_SIZE * 4; // make it larger to absorb jitter
+static size_t g_ring_read = 0;
+static size_t g_ring_write = 0;
+static size_t g_ring_count = 0;
+static std::mutex g_ring_mutex;
+static std::condition_variable g_ring_cv;
+
+// Forward declarations for ring buffer helpers
+static void ring_write(const unsigned char* data, size_t len);
+static size_t ring_read(unsigned char* out, size_t len);
 
 static int file_number = 1;
 static p_ipc_endpoint_t g_ipc_ep;
@@ -133,8 +149,6 @@ void record_callback(unsigned char *buffer, size_t size, void *user_data) {
 
 // Callback function for playing
 int play_get_data_callback(unsigned char *buffer, size_t size) {
-    static int play_buffer_offset = 0;
-
     static int init = 0;
 
     if (!init)
@@ -146,66 +160,78 @@ int play_get_data_callback(unsigned char *buffer, size_t size) {
         get_actual_play_settings(&outputSampleRate, &outputChannels, &outputFormat);
         init_opus_decoder(16000, 1, 60, outputSampleRate, outputChannels);
 
+        // initialize ring buffer
+        g_ring_buffer.resize(g_ring_capacity);
+
         init = 1;
     }
-    
-    // 如果 g_play_buffer 中没有足够的数据，则从 WebSocket 客户端接收数据并解码
-    while (play_buffer_offset < size) {
-        int opus_data_size = 0;
-        int pcm_data_size = 0;
-        //std::cout << "play_get_data_callback ************************************** "<<std::endl;
-        // 从使用UDP接收数据
-        if (g_ipc_ep->recv(g_ipc_ep, g_opus_play_buffer, OPUS_BUF_SIZE, &opus_data_size) != 0) {
-            fprintf(stderr, "Failed to receive data from WebSocket client\n");
-            return 0; // 返回0表示没有数据可用
-        }
 
-#if 0
-        static int file_number = 1;
-        // 构造文件名
-        char filename[20];
-        snprintf(filename, sizeof(filename), "test%03d.opus", file_number);
-
-        // 打开文件
-        FILE *file = fopen(filename, "wb");
-        if (file) {
-            // 写入Opus数据
-            fwrite(g_opus_play_buffer, 1, opus_data_size, file);
-            fclose(file);
-            file_number++; // 增加文件编号
-        } else {
-            fprintf(stderr, "Failed to open file %s for writing\n", filename);
-        }        
-#endif
-        //std::cout << "get opus data "<<opus_data_size<< std::endl;
-
-        // 解码 Opus 数据为 PCM 数据
-        if (opus_data_size > 0) {
-            opus2pcm(g_opus_play_buffer, opus_data_size, g_play_buffer+play_buffer_offset, &pcm_data_size);
-            if (pcm_data_size <= 0) {
-                fprintf(stderr, "Failed to decode Opus data to PCM\n");
-                return 0; // 返回0表示没有数据可用
-            }
-        } else {
-            // 如果没有接收到数据，等待一段时间后重试
-            std::this_thread::sleep_for(std::chrono::milliseconds(10));
-            continue;
-        }
-
-        // 更新 g_play_buffer 的偏移量
-        play_buffer_offset += pcm_data_size;
+    // Try to read from ring buffer
+    size_t read = ring_read(buffer, size);
+    if (read < size) {
+        // fill rest with silence
+        memset(buffer + read, 0, size - read);
     }
 
-    // 复制数据到 buffer
-    memcpy(buffer, g_play_buffer, size);
-    memmove(g_play_buffer, g_play_buffer+size, play_buffer_offset - size);
-    play_buffer_offset -= size;    
-
-    return size; 
+    return size;
 }
 
 void handle_signal(int sig) {
     printf("Received signal %d, exiting..., g_totalPCMDataSize = %d, file_number = %d\n", sig, g_totalPCMDataSize, file_number);
+}
+
+// Helper: write PCM data into ring buffer (non-blocking, drops oldest if full)
+static void ring_write(const unsigned char* data, size_t len) {
+    std::unique_lock<std::mutex> lk(g_ring_mutex);
+    for (size_t i = 0; i < len; ++i) {
+        if (g_ring_count == g_ring_capacity) {
+            // drop oldest byte to make room
+            g_ring_read = (g_ring_read + 1) % g_ring_capacity;
+            g_ring_count--;
+        }
+        g_ring_buffer[g_ring_write] = data[i];
+        g_ring_write = (g_ring_write + 1) % g_ring_capacity;
+        g_ring_count++;
+    }
+    lk.unlock();
+    g_ring_cv.notify_one();
+}
+
+// Helper: read up to len bytes from ring buffer into out; returns number read
+static size_t ring_read(unsigned char* out, size_t len) {
+    std::unique_lock<std::mutex> lk(g_ring_mutex);
+    size_t toread = std::min(len, g_ring_count);
+    for (size_t i = 0; i < toread; ++i) {
+        out[i] = g_ring_buffer[g_ring_read];
+        g_ring_read = (g_ring_read + 1) % g_ring_capacity;
+    }
+    g_ring_count -= toread;
+    return toread;
+}
+
+// Receiver + decoder thread: blocks on UDP recv, decodes Opus to PCM and pushes into ring buffer
+static void receiver_thread_func() {
+    while (1) {
+        int opus_data_size = 0;
+        int recv_res = g_ipc_ep->recv(g_ipc_ep, g_opus_play_buffer, OPUS_BUF_SIZE, &opus_data_size);
+        if (recv_res != 0) {
+            // recv error - wait a bit and retry
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            continue;
+        }
+        if (opus_data_size <= 0) {
+            // no data - small sleep
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+            continue;
+        }
+
+        // decode opus to temporary buffer
+        int pcm_data_size = 0;
+        opus2pcm(g_opus_play_buffer, opus_data_size, g_play_buffer, &pcm_data_size);
+        if (pcm_data_size > 0) {
+            ring_write(g_play_buffer, pcm_data_size);
+        }
+    }
 }
 
 int main() {
@@ -232,6 +258,9 @@ int main() {
         return -1;
     }
 
+    // Create a thread for receiver + decoder
+    std::thread receiver_thread(receiver_thread_func);
+
     // Wait for either thread to exit
     int record_thread_status;
     int play_thread_status;
@@ -243,6 +272,8 @@ int main() {
     if (pthread_join(play_thread, (void**)&play_thread_status) != 0) {
         fprintf(stderr, "Failed to join playing thread\n");
     }
+
+    receiver_thread.join(); // wait for receiver thread to finish
 
     // Check the exit status of the threads
     if (record_thread_status != 0 || play_thread_status != 0) {
