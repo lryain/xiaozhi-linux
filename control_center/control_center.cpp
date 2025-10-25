@@ -411,9 +411,71 @@ bool write_uuid_to_config(const std::string& uuid) {
     return false;
 }
 
+/**
+ * 从服务器配置文件中读取服务器信息
+ *
+ * 该函数尝试从 conf/server.json 文件中读取服务器配置信息。
+ * 如果文件不存在或解析失败，则返回默认值。
+ *
+ * @param hostname 输出参数，服务器主机名
+ * @param port 输出参数，服务器端口
+ * @param path 输出参数，WebSocket路径
+ * @param ota_url 输出参数，OTA URL
+ * @param use_tls 输出参数，是否使用TLS
+ */
+void read_server_config(std::string& hostname, std::string& port, std::string& path, std::string& ota_url, bool& use_tls) {
+    // 默认值
+    hostname = "api.tenclass.net";
+    port = "443";
+    path = "/xiaozhi/v1/";
+    ota_url = "https://api.tenclass.net/xiaozhi/ota/";
+    use_tls = true;
+
+    std::ifstream config_file("../conf/server.json");
+    if (!config_file.is_open()) {
+        std::cerr << "Warning: Failed to open ../conf/server.json, using default server config" << std::endl;
+        return;
+    }
+
+    try {
+        json config_json;
+        config_file >> config_json;
+        config_file.close();
+
+        if (config_json.contains("server")) {
+            auto server = config_json["server"];
+            if (server.contains("hostname")) {
+                hostname = server["hostname"].get<std::string>();
+            }
+            if (server.contains("port")) {
+                port = server["port"].get<std::string>();
+            }
+            if (server.contains("path")) {
+                path = server["path"].get<std::string>();
+            }
+            if (server.contains("ota_url")) {
+                ota_url = server["ota_url"].get<std::string>();
+            }
+            if (server.contains("use_tls")) {
+                use_tls = server["use_tls"].get<bool>();
+            }
+            std::cout << "Loaded server config from ../conf/server.json" << std::endl;
+        }
+    } catch (const nlohmann::json::parse_error& e) {
+        std::cerr << "Warning: Failed to parse ../conf/server.json: " << e.what() << ", using default config" << std::endl;
+    } catch (const std::exception& e) {
+        std::cerr << "Warning: Error reading server config: " << e.what() << ", using default config" << std::endl;
+    }
+}
+
 int main(int argc, char **argv)
 {
     char active_code[20] = "";
+
+    // 读取服务器配置
+    std::string server_hostname, server_port, server_path, server_ota_url;
+    bool server_use_tls;
+    read_server_config(server_hostname, server_port, server_path, server_ota_url, server_use_tls);
 
     // 获取无线网卡的 MAC 地址
     std::string mac = get_wireless_mac_address();
@@ -444,7 +506,7 @@ int main(int argc, char **argv)
     g_ipc_ep_ui = ipc_endpoint_create_udp(UI_PORT_UP, UI_PORT_DOWN, process_ui_data, NULL);
 
     http_data_t http_data;
-    http_data.url = "https://api.tenclass.net/xiaozhi/ota/";
+    http_data.url = server_ota_url;
 
     // 替换 http_data.post 中的 uuid
     std::ostringstream post_stream;
@@ -518,9 +580,10 @@ int main(int argc, char **argv)
             }
         })";
 
-    ws_data.hostname = "api.tenclass.net";
-    ws_data.port = "443";
-    ws_data.path = "/xiaozhi/v1/";    
+    ws_data.hostname = server_hostname;
+    ws_data.port = server_port;
+    ws_data.path = server_path;    
+    ws_data.use_tls = server_use_tls;
 
     websocket_set_callbacks(process_opus_data_downloaded, process_txt_data_downloaded, &ws_data);
     websocket_start();

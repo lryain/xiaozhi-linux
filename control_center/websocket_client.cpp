@@ -33,13 +33,15 @@
 #include <fstream>
 #include <vector>
 #include <algorithm>
+#include <thread>
 #include <dirent.h>
 
 // Include nlohmann/json library
 #include "json.hpp"
 #include "websocket_client.h"
 
-typedef websocketpp::client<websocketpp::config::asio_tls_client> client;
+typedef websocketpp::client<websocketpp::config::asio_tls_client> tls_client;
+typedef websocketpp::client<websocketpp::config::asio_client> plain_client;
 typedef websocketpp::lib::shared_ptr<websocketpp::lib::asio::ssl::context> context_ptr;
 
 using websocketpp::lib::placeholders::_1;
@@ -50,7 +52,8 @@ using websocketpp::lib::bind;
 
 using json = nlohmann::json;
 
-static client* g_p_ws_client;
+static void *g_p_ws_client = nullptr;
+static bool g_use_tls = true;
 static websocketpp::connection_hdl g_hdl;
 static websocket_data_t *g_ws_data;
 static ws_recv_callback_t g_ws_recv_bin_cb;
@@ -64,7 +67,8 @@ static volatile int g_iHasConnected = 0;
  * @param hdl 连接句柄
  * @param msg 接收到的消息
  */
-static void on_message(client *c, websocketpp::connection_hdl hdl, client::message_ptr msg) {
+template <typename Client>
+static void on_message(Client *c, websocketpp::connection_hdl hdl, typename Client::message_ptr msg) {
     
     // 获取操作码
     auto opcode = msg->get_opcode();    
@@ -208,6 +212,9 @@ static bool verify_certificate(const char * hostname, bool preverified, boost::a
  * @return TLS上下文指针
  */
 static context_ptr on_tls_init(const char * hostname, websocketpp::connection_hdl) {
+    // 检查全局配置是否需要 TLS
+    bool use_tls = g_ws_data ? g_ws_data->use_tls : true;
+    
     context_ptr ctx = websocketpp::lib::make_shared<boost::asio::ssl::context>(boost::asio::ssl::context::sslv23);
  
     try {
@@ -216,12 +223,13 @@ static context_ptr on_tls_init(const char * hostname, websocketpp::connection_hd
                          boost::asio::ssl::context::no_sslv3 |
                          boost::asio::ssl::context::single_dh_use);
  
-        // 注释掉下面这行，否则会出现TLS握手失败错误
-        //ctx->set_verify_mode(boost::asio::ssl::verify_peer);
-        ctx->set_verify_callback(bind(&verify_certificate, hostname, ::_1, ::_2));
- 
-        // 注释掉下面这行，否则会打印:load_verify_file: No such file or directory
-        //ctx->load_verify_file("ca-chain.cert.pem");
+        if (use_tls) {
+            // 只有在使用 TLS 时才进行证书验证
+            ctx->set_verify_callback(bind(&verify_certificate, hostname, ::_1, ::_2));
+        } else {
+            // 不使用 TLS 时，禁用验证
+            ctx->set_verify_mode(boost::asio::ssl::verify_none);
+        }
     } catch (std::exception& e) {
         std::cout << e.what() << std::endl;
     }
@@ -234,7 +242,8 @@ static context_ptr on_tls_init(const char * hostname, websocketpp::connection_hd
  * @param c 指向WebSocket客户端的指针
  * @param hdl 连接句柄
  */
-static void on_open(client* c, websocketpp::connection_hdl hdl) {
+template <typename Client>
+static void on_open(Client* c, websocketpp::connection_hdl hdl) {
     g_hdl = hdl;
     g_iHasConnected = 1;
     websocket_data_t *ws_data = g_ws_data;
@@ -263,19 +272,12 @@ static void on_open(client* c, websocketpp::connection_hdl hdl) {
     }
 }
 
-/**
- * 处理连接关闭事件
- * 
- * @param c 指向WebSocket客户端的指针
- * @param hdl 连接句柄
- * @param ec 错误代码
- * @param reason 关闭原因
- */
-static void on_close(client *c, websocketpp::connection_hdl hdl) {
+template <typename Client>
+static void on_close(Client *c, websocketpp::connection_hdl hdl) {
     g_iHasConnected = 0;
     g_iHasShaked = 0;
-    client::connection_ptr con = c->get_con_from_hdl(hdl);
-                
+    typename Client::connection_ptr con = c->get_con_from_hdl(hdl);
+
     std::cout << "Connection closed. Code: " << con->get_remote_close_code() << ", Reason: " << con->get_remote_close_reason() << "!!" << std::endl;
 
     // 重新连接逻辑可以在这里实现
@@ -284,20 +286,37 @@ static void on_close(client *c, websocketpp::connection_hdl hdl) {
     //websocket_start(); // 重新启动WebSocket线程
 }
 
+template <typename Client>
+static void configure_tls_handler(Client *, bool, const std::string&) {}
+
+template <>
+inline void configure_tls_handler<tls_client>(tls_client *c, bool use_tls, const std::string& hostname) {
+    if (use_tls) {
+        c->set_tls_init_handler(bind(&on_tls_init, hostname.c_str(), ::_1));
+    }
+}
+
 /**
  * 建立WebSocket连接
  * 
  * @param c 指向WebSocket客户端的指针
  * @return 错误码
  */
-static int websocket_connect(client *c) {
+template <typename Client>
+static int websocket_connect(Client *c) {
     websocket_data_t *ws_data = g_ws_data;
 
     std::string hostname = ws_data->hostname;
     std::string port = ws_data->port;
     std::string path = ws_data->path;
+    bool use_tls = ws_data->use_tls;
 
-    std::string uri = "wss://" + hostname + ":" + port + path;
+    std::string uri;
+    if (use_tls) {
+        uri = "wss://" + hostname + ":" + port + path;
+    } else {
+        uri = "ws://" + hostname + ":" + port + path;
+    }
 
     std::cout << "Connecting to " << uri << std::endl;
 
@@ -311,17 +330,17 @@ static int websocket_connect(client *c) {
         c->init_asio();
 
         // 注册消息处理程序
-        c->set_message_handler(bind(&on_message, c, ::_1, ::_2));
-        c->set_tls_init_handler(bind(&on_tls_init, hostname.c_str(), ::_1));
+        c->set_message_handler(bind(&on_message<Client>, c, ::_1, ::_2));
+        configure_tls_handler<Client>(c, use_tls, hostname);
 
         // 注册连接打开处理程序
-        c->set_open_handler(bind(&on_open, c, ::_1));
+        c->set_open_handler(bind(&on_open<Client>, c, ::_1));
 
         // 注册连接关闭处理程序
-        c->set_close_handler(bind(&on_close, c, ::_1));
+        c->set_close_handler(bind(&on_close<Client>, c, ::_1));
 
         websocketpp::lib::error_code ec;
-        client::connection_ptr con = c->get_connection(uri, ec);
+        typename Client::connection_ptr con = c->get_connection(uri, ec);
         if (ec) {
             std::cout << "could not create connection because: " << ec.message() << std::endl;
             return -1;
@@ -370,20 +389,20 @@ static int websocket_connect(client *c) {
  * @param arg 参数指针
  * @return 线程返回值
  */
-static void *websocket_thread(void *arg) {
-    client *c = (client *)arg;
- 
+template <typename Client>
+static void websocket_thread_impl(Client *c) {
     try {
-        websocket_connect(c);
-         // 启动ASIO io_service运行循环
-         c->run();
-         c->stop();
-         delete c;
-         std::cout<<"exit from websocket_thread"<<std::endl;
-         websocket_start();
-     } catch (websocketpp::exception const & e) {
-         std::cout << "exit hear!" << e.what() << "exit here!!" << std::endl;
-     }
+        websocket_connect<Client>(c);
+        // 启动ASIO io_service运行循环
+        c->run();
+        c->stop();
+    delete c;
+    g_p_ws_client = nullptr;
+        std::cout << "exit from websocket_thread" << std::endl;
+        websocket_start();
+    } catch (websocketpp::exception const & e) {
+        std::cout << "exit hear!" << e.what() << "exit here!!" << std::endl;
+    }
 }
 
 /**
@@ -393,23 +412,26 @@ static void *websocket_thread(void *arg) {
  * @param size 数据大小
  * @return 错误码
  */
-int websocket_send_binary(const char *data, int size) {
-    client* c = g_p_ws_client;
+template <typename Client>
+static int websocket_send_binary_impl(Client *c, const char *data, int size) {
     websocketpp::connection_hdl hdl = g_hdl;
 
-    static int cnt = 0;
-
-    // 发送二进制数据
-    if (g_iHasConnected && g_iHasShaked){
-        //printf("send data cnt  = %d, size = %d\n", cnt++, size);
+    if (g_iHasConnected && g_iHasShaked) {
         try {
             c->send(hdl, data, size, websocketpp::frame::opcode::binary);
         } catch (websocketpp::exception const & e) {
             std::cout << "exit in websocket_send_binary: " << e.what() << std::endl;
-            websocket_connect(c);
+            websocket_connect<Client>(c);
         }
     }
     return 0;
+}
+
+int websocket_send_binary(const char *data, int size) {
+    if (g_use_tls) {
+        return websocket_send_binary_impl(static_cast<tls_client *>(g_p_ws_client), data, size);
+    }
+    return websocket_send_binary_impl(static_cast<plain_client *>(g_p_ws_client), data, size);
 }
 
 /**
@@ -419,21 +441,27 @@ int websocket_send_binary(const char *data, int size) {
  * @param size 数据大小
  * @return 错误码
  */
-int websocket_send_text(const char *data, int size) {
-    client* c = g_p_ws_client;
+template <typename Client>
+static int websocket_send_text_impl(Client *c, const char *data, int size) {
     websocketpp::connection_hdl hdl = g_hdl;
 
-    // 发送文本数据
-    if (g_iHasConnected){
+    if (g_iHasConnected) {
         try {
             c->send(hdl, data, size, websocketpp::frame::opcode::text);
         } catch (websocketpp::exception const & e) {
             std::cout << "exit in websocket_send_text: " << e.what() << std::endl;
-            websocket_connect(c);
+            websocket_connect<Client>(c);
         }
         g_iHasShaked = 1;
     }
     return 0;
+}
+
+int websocket_send_text(const char *data, int size) {
+    if (g_use_tls) {
+        return websocket_send_text_impl(static_cast<tls_client *>(g_p_ws_client), data, size);
+    }
+    return websocket_send_text_impl(static_cast<plain_client *>(g_p_ws_client), data, size);
 }
 
 /**
@@ -448,6 +476,7 @@ int websocket_set_callbacks(ws_recv_callback_t bin_cb, ws_recv_callback_t txt_cb
     g_ws_recv_bin_cb = bin_cb;
     g_ws_recv_txt_cb = txt_cb;
     g_ws_data = ws_data;
+    g_use_tls = ws_data ? ws_data->use_tls : true;
     return 0;
 }
 
@@ -457,12 +486,17 @@ int websocket_set_callbacks(ws_recv_callback_t bin_cb, ws_recv_callback_t txt_cb
  * @return 返回值
  */
 int websocket_start() {
-    g_p_ws_client = new client();
-    // 创建并启动线程 websocket_thread
-    std::thread ws_thread(websocket_thread, g_p_ws_client);
-
-    // 将线程分离，使其在后台运行
-    ws_thread.detach();
-
+    if (g_use_tls) {
+        tls_client *c = new tls_client();
+        g_p_ws_client = c;
+        std::thread ws_thread(websocket_thread_impl<tls_client>, c);
+        ws_thread.detach();
+    } else {
+        plain_client *c = new plain_client();
+        g_p_ws_client = c;
+        std::thread ws_thread(websocket_thread_impl<plain_client>, c);
+        ws_thread.detach();
+    }
     return 0;
 }
+

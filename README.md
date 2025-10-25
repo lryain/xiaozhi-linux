@@ -49,6 +49,78 @@ Linux 小智运行演示视频：https://www.bilibili.com/video/BV17nXNYJE5P/?sh
 
 ![03_control_center框架分析](docs/img/03_control_center框架分析-3.png)
 
+## 编译说明
+
+### 环境要求
+
+- Ubuntu/Debian 系统
+- 安装必要的依赖包：
+
+```bash
+sudo apt update
+sudo apt install build-essential libasound2-dev libopus-dev libspeexdsp-dev libboost-system-dev libssl-dev libcurl4-openssl-dev nlohmann-json3-dev
+```
+
+### 编译方法
+
+#### 方法1：使用多线程编译脚本（推荐）
+
+```bash
+# 编译所有组件
+./build.sh
+
+# 或者分别编译
+cd control_center && make fast
+cd ../sound_app && make fast
+```
+
+#### 方法2：手动编译
+
+```bash
+# 编译 control_center
+cd control_center
+make -j$(nproc)  # 使用所有 CPU 核心并行编译
+
+# 编译 sound_app  
+cd ../sound_app
+make -j$(nproc)  # 使用所有 CPU 核心并行编译
+```
+
+#### 方法3：使用 make 目标
+
+```bash
+# 快速并行编译（自动清理并重新编译）
+cd control_center && make fast
+cd ../sound_app && make fast
+
+# 或者使用并行目标
+cd control_center && make parallel
+cd ../sound_app && make parallel
+```
+
+### 编译选项
+
+- `make all` - 普通编译
+- `make parallel` - 并行编译（使用自动检测的核心数）
+- `make fast` - 快速并行编译（先清理再编译）
+- `make -jN` - 指定使用 N 个并行任务
+
+### 配置文件
+
+服务器配置位于 `conf/server.json`：
+
+```json
+{
+    "server": {
+        "hostname": "your-server-ip",
+        "port": "8000",
+        "path": "/xiaozhi/v1/",
+        "ota_url": "http://your-server-ip:8002/xiaozhi/ota/",
+        "use_tls": false
+    }
+}
+```
+
 ## 提交贡献
 
 此仓库目前只是保留 Linux AI小智部分源码，不含平台相关，欢迎大家 提交 issue PR 来帮助改进 Linux小智。

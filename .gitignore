@@ -1,0 +1,86 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+venv/
+ENV/
+.env/
+.venv/
+env/
+env.bak/
+pip-wheel-metadata/
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache/
+.pytest_cache/
+.mypy_cache/
+.pyre/
+.pytype/
+
+# C/C++ and build
+build/
+**/build/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+*.o
+*.obj
+*.lo
+*.la
+*.al
+*.dylib
+*.dll
+*.exe
+*.map
+*.ilk
+*.idb
+*.pdb
+*.gcda
+*.gcno
+*.gcov
+
+# Shared libs and temporary artifacts (note: tracked libs already in repo won't be removed by .gitignore)
+*.so
+*.a
+*.d
+
+# IDEs and editors
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+*.swp
+*~
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+
+# Misc
+dist/
+build-*/
+*.egg-info/
+.eggs/
+
+# Node / JS (if present)
+node_modules/
+
+# Coverage
+coverage.xml
+
+# OS
+*.bak
+
+# Ignore secrets/config local overrides
+config/*.local.yaml
+scripts/.venv/
+
+out/
+assets/lcd_runtime/
+# end

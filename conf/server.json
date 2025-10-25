@@ -1,0 +1,16 @@
+{
+    "server-remote": {
+        "hostname": "api.tenclass.net",
+        "port": "443",
+        "path": "/xiaozhi/v1/",
+        "ota_url": "https://api.tenclass.net/xiaozhi/ota/",
+        "use_tls": true
+    },
+    "server": {
+        "hostname": "192.168.3.55",
+        "port": "8000",
+        "path": "/xiaozhi/v1/",
+        "ota_url": "http://192.168.3.55:8002/xiaozhi/ota/",
+        "use_tls": false
+    }
+}

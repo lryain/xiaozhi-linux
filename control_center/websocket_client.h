@@ -12,6 +12,7 @@ typedef struct websocket_data_t {
     std::string path; 
     std::string hello;
     std::string headers;
+    bool use_tls;
 } websocket_data_t;
 
 /**
